@@ -1,0 +1,24 @@
+# Screen Constellation - Multi-Window Graph Visualization
+
+A real-time collaborative graph visualization where each browser window appears as a node. Nodes move in organic patterns and connect to nearby nodes, creating a dynamic network that syncs across windows via BroadcastChannel API.
+
+## Try It Out
+
+Open `dist/index.html` in multiple browser windows and move them around. Each window represents a node that connects to the 3 nearest nodes, creating a live graph visualization.
+
+**Quick start:**
+
+```bash
+cd screen-constellation
+deno bundle --outdir dist index.html
+deno run -A npm:http-server
+```
+
+Then open `http://localhost:8080/screen-constellation/dist/` in multiple windows.
+
+## Features
+
+- Real-time multi-window synchronization
+- Organic node movement patterns
+- Dynamic edge connections based on proximity
+- Responsive canvas with device pixel ratio support
