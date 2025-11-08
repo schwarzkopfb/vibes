@@ -2,6 +2,8 @@
 
 A real-time collaborative graph visualization where each browser window appears as a node. Nodes move in organic patterns and connect to nearby nodes, creating a dynamic network that syncs across windows via BroadcastChannel API.
 
+![screen-constellation](https://github.com/user-attachments/assets/b1af39a2-f5d7-4fea-827b-035e8e1d062e)
+
 ## Try It Out
 
 Open `dist/index.html` in multiple browser windows and move them around. Each window represents a node that connects to the 3 nearest nodes, creating a live graph visualization.
