@@ -1,26 +1,28 @@
-export interface ScreenLensState {
+export interface WindowBoundsObserverState {
   viewportX: number;
   viewportY: number;
   canvasOffsetX: number;
   canvasOffsetY: number;
 }
 
-export type ScreenLensListener = (state: ScreenLensState) => void;
+export type WindowBoundsObserverListener = (
+  state: WindowBoundsObserverState
+) => void;
 
-export interface ScreenLensController {
+export interface WindowBoundsObserver {
   stop(): void;
-  getState(): ScreenLensState;
+  getState(): WindowBoundsObserverState;
 }
 
-export function createScreenLens(
-  onUpdate: ScreenLensListener
-): ScreenLensController {
+export function createWindowBoundsObserver(
+  onUpdate: WindowBoundsObserverListener
+): WindowBoundsObserver {
   let tracking = false;
   let frameId = 0;
   let lastTime = 0;
   let lastState = computeState();
 
-  function computeState(): ScreenLensState {
+  function computeState(): WindowBoundsObserverState {
     const sx = window.screenX ?? (window as any).screenLeft ?? 0;
     const sy = window.screenY ?? (window as any).screenTop ?? 0;
     const outerW = window.outerWidth || window.innerWidth;
@@ -37,7 +39,10 @@ export function createScreenLens(
     };
   }
 
-  function hasChanged(a: ScreenLensState, b: ScreenLensState): boolean {
+  function hasChanged(
+    a: WindowBoundsObserverState,
+    b: WindowBoundsObserverState
+  ): boolean {
     return (
       a.viewportX !== b.viewportX ||
       a.viewportY !== b.viewportY ||

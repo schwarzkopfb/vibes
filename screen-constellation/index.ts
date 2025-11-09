@@ -1,244 +1,312 @@
 import "./index.css";
-import { createScreenLens } from "./utils/positioner.ts";
+import { createWindowBoundsObserver } from "./utils/windowBoundsObserver.ts";
 import { mulberry32, hashStringToSeed } from "./utils/random.ts";
-import { lerp, TWO_PI } from "./utils/math.ts";
+import { TWO_PI } from "./utils/math.ts";
 import {
   BROADCAST_INTERVAL,
-  COLORS,
-  EDGE,
-  GRID,
-  MAX_DISTANCE,
   MAX_EDGES_PER_NODE,
+  MIN_MAX_DISTANCE,
   NODE,
-  TIME_SCALE,
-  WORLD_HEIGHT,
-  WORLD_WIDTH,
 } from "./utils/config.ts";
+import {
+  type Point,
+  ViewportBounds,
+  drawBackground,
+  drawEdge,
+  drawNode,
+} from "./utils/drawing.ts";
 
-type NodeParams = {
+interface NodeAnimationParams {
   radius: number;
-  s1: number;
-  s2: number;
-  phi: number;
-  psi: number;
-};
+  speedX: number;
+  speedY: number;
+  phaseX: number;
+  phaseY: number;
+}
 
-type Node = { baseX: number; baseY: number };
-type NodeEntry = { id: string; x: number; y: number };
-type Distance = { j: number; d2: number };
+interface NodeBasePosition {
+  baseX: number;
+  baseY: number;
+}
+
+interface RenderedNode {
+  id: string;
+  x: number;
+  y: number;
+}
+
+interface NodeDistance {
+  nodeIndex: number;
+  distanceSquared: number;
+}
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
 const ctx = canvas?.getContext("2d");
-const id =
+const nodeId =
   (crypto.randomUUID && crypto.randomUUID()) ||
   Math.random().toString(36).slice(2);
-const channel = new BroadcastChannel("window-graph");
-const nodes = new Map<string, Node>();
-const nodeParamsCache = new Map<string, NodeParams>();
+const broadcastChannel = new BroadcastChannel("window-graph");
+const nodePositions = new Map<string, NodeBasePosition>();
+const nodeParamsCache = new Map<string, NodeAnimationParams>();
 
-let selfBase = { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
-let lastBroadcast = 0;
+let currentNodeBase: NodeBasePosition = { baseX: 0, baseY: 0 };
+let lastBroadcastTime = 0;
+let viewportBounds: ViewportBounds = {
+  minX: 0,
+  minY: 0,
+  maxX: window.innerWidth,
+  maxY: window.innerHeight,
+};
 
-function resizeCanvas() {
+function resizeCanvas(): void {
   if (!canvas || !ctx) return;
-  canvas.style.width = `${WORLD_WIDTH}px`;
-  canvas.style.height = `${WORLD_HEIGHT}px`;
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = WORLD_WIDTH * dpr;
-  canvas.height = WORLD_HEIGHT * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const devicePixelRatio = window.devicePixelRatio || 1;
+
+  canvas.width = width * devicePixelRatio;
+  canvas.height = height * devicePixelRatio;
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 }
 
-function getNodeParams(nodeId: string): NodeParams {
-  let p = nodeParamsCache.get(nodeId);
-  if (p) return p;
-  const r = mulberry32(hashStringToSeed(nodeId) || 1);
-  p = {
-    radius: NODE.RADIUS_MIN + r() * NODE.RADIUS_RANGE,
-    s1: NODE.SPEED_MIN + r() * NODE.SPEED_RANGE,
-    s2: NODE.SPEED_MIN + r() * NODE.SPEED_RANGE,
-    phi: r() * TWO_PI,
-    psi: r() * TWO_PI,
+function getNodeAnimationParams(nodeId: string): NodeAnimationParams {
+  const cached = nodeParamsCache.get(nodeId);
+  if (cached) return cached;
+
+  const random = mulberry32(hashStringToSeed(nodeId) || 1);
+  const params: NodeAnimationParams = {
+    radius: NODE.RADIUS_MIN + random() * NODE.RADIUS_RANGE,
+    speedX: NODE.SPEED_MIN + random() * NODE.SPEED_RANGE,
+    speedY: NODE.SPEED_MIN + random() * NODE.SPEED_RANGE,
+    phaseX: random() * TWO_PI,
+    phaseY: random() * TWO_PI,
   };
-  nodeParamsCache.set(nodeId, p);
-  return p;
+
+  nodeParamsCache.set(nodeId, params);
+  return params;
 }
 
-function getDrawPos(nodeId: string, baseX: number, baseY: number, t: number) {
-  const p = getNodeParams(nodeId);
+function calculateAnimatedPosition(
+  nodeId: string,
+  baseX: number,
+  baseY: number,
+  time: number
+): Point {
+  const params = getNodeAnimationParams(nodeId);
   return {
-    x: baseX + Math.cos(t * p.s1 + p.phi) * p.radius,
-    y: baseY + Math.sin(t * p.s2 + p.psi) * p.radius,
+    x: baseX + Math.cos(time * params.speedX + params.phaseX) * params.radius,
+    y: baseY + Math.sin(time * params.speedY + params.phaseY) * params.radius,
   };
 }
 
-function drawGrid() {
-  if (!ctx) return;
-  ctx.save();
-  ctx.strokeStyle = COLORS.GRID;
-  ctx.globalAlpha = GRID.ALPHA;
-  ctx.lineWidth = GRID.LINE_WIDTH;
-
-  for (let x = 0; x <= WORLD_WIDTH; x += GRID.STEP) {
-    ctx.beginPath();
-    ctx.moveTo(x + 0.5, 0);
-    ctx.lineTo(x + 0.5, WORLD_HEIGHT);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= WORLD_HEIGHT; y += GRID.STEP) {
-    ctx.beginPath();
-    ctx.moveTo(0, y + 0.5);
-    ctx.lineTo(WORLD_WIDTH, y + 0.5);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawBackground() {
-  if (!ctx) return;
-  ctx.clearRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-  ctx.fillStyle = COLORS.BACKGROUND;
-  ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-  drawGrid();
-}
-
-function drawEdge(
-  ctx: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  distance: number
-) {
-  const softness = 1 - Math.min(distance / MAX_DISTANCE, 1);
-  ctx.globalAlpha = lerp(EDGE.ALPHA_MIN, EDGE.ALPHA_MAX, softness);
-  ctx.lineWidth = lerp(EDGE.WIDTH_MIN, EDGE.WIDTH_MAX, softness);
-  ctx.beginPath();
-  ctx.moveTo(x1, y1);
-  ctx.lineTo(x2, y2);
-  ctx.strokeStyle = COLORS.EDGE;
-  ctx.stroke();
-}
-
-function drawNode(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  centerX: number,
-  centerY: number,
-  isSelf: boolean
-) {
-  const dx = x - centerX;
-  const dy = y - centerY;
-  const angle = Math.atan2(dy, dx);
-  const tAngle = (angle + Math.PI) / TWO_PI;
-  const r =
-    (isSelf ? NODE.RADIUS_SELF : NODE.RADIUS_OTHER) +
-    (tAngle - 0.5) * NODE.RADIUS_VARIATION;
-
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, TWO_PI);
-  ctx.fillStyle = isSelf ? COLORS.NODE_SELF : COLORS.NODE_OTHER;
-  ctx.globalAlpha = isSelf ? NODE.ALPHA_SELF : NODE.ALPHA_OTHER;
-  ctx.fill();
-}
-
-function drawGraph(t: number) {
+function renderGraph(): void {
   if (!ctx) return;
 
-  nodes.set(id, { baseX: selfBase.x, baseY: selfBase.y });
+  const renderingContext = ctx;
+  const time = Date.now();
+  const preciseTime = performance.now();
 
-  const now = performance.now();
-  if (now - lastBroadcast > BROADCAST_INTERVAL) {
-    lastBroadcast = now;
-    channel.postMessage({ type: "pos", id, x: selfBase.x, y: selfBase.y });
-  }
-
-  const entries: NodeEntry[] = Array.from(nodes.entries()).map(([nid, n]) => {
-    const pos = getDrawPos(nid, n.baseX, n.baseY, t);
-    return { id: nid, x: pos.x, y: pos.y };
+  nodePositions.set(nodeId, {
+    baseX: currentNodeBase.baseX,
+    baseY: currentNodeBase.baseY,
   });
 
-  if (entries.length === 0) return;
+  if (preciseTime - lastBroadcastTime > BROADCAST_INTERVAL) {
+    lastBroadcastTime = preciseTime;
+    broadcastChannel.postMessage({
+      type: "pos",
+      id: nodeId,
+      x: currentNodeBase.baseX,
+      y: currentNodeBase.baseY,
+    });
+  }
 
-  const n = entries.length;
-  const centerX = entries.reduce((sum, node) => sum + node.x, 0) / n;
-  const centerY = entries.reduce((sum, node) => sum + node.y, 0) / n;
+  const renderedNodes: RenderedNode[] = Array.from(nodePositions.entries()).map(
+    ([id, nodeBase]) => {
+      const position = calculateAnimatedPosition(
+        id,
+        nodeBase.baseX,
+        nodeBase.baseY,
+        time
+      );
+      return { id, x: position.x, y: position.y };
+    }
+  );
+
+  if (renderedNodes.length === 0) return;
+
+  const nodeCount = renderedNodes.length;
+  const centerX =
+    renderedNodes.reduce((sum, node) => sum + node.x, 0) / nodeCount;
+  const centerY =
+    renderedNodes.reduce((sum, node) => sum + node.y, 0) / nodeCount;
+  const viewportWidth = viewportBounds.maxX - viewportBounds.minX;
+  const viewportHeight = viewportBounds.maxY - viewportBounds.minY;
   const edges = new Set<string>();
+  const edgeDistances: number[] = [];
 
-  function addEdge(i: number, j: number) {
-    if (i === j) return;
-    const a = Math.min(i, j);
-    const b = Math.max(i, j);
-    const key = `${a}-${b}`;
-    if (edges.has(key)) return;
-    edges.add(key);
+  for (let i = 0; i < nodeCount; i++) {
+    const sourceNode = renderedNodes[i];
+    const distances: NodeDistance[] = [];
 
-    const na = entries[a];
-    const nb = entries[b];
-    const dx = na.x - nb.x;
-    const dy = na.y - nb.y;
-    const distance = Math.hypot(dx, dy);
-    if (!distance) return;
-
-    if (ctx) drawEdge(ctx, na.x, na.y, nb.x, nb.y, distance);
-  }
-
-  for (let i = 0; i < n; i++) {
-    const a = entries[i];
-    const dists: Distance[] = [];
-    for (let j = 0; j < n; j++) {
+    for (let j = 0; j < nodeCount; j++) {
       if (i === j) continue;
-      const b = entries[j];
-      const dx = a.x - b.x;
-      const dy = a.y - b.y;
-      dists.push({ j, d2: dx * dx + dy * dy });
+      const targetNode = renderedNodes[j];
+      const dx = sourceNode.x - targetNode.x;
+      const dy = sourceNode.y - targetNode.y;
+      distances.push({
+        nodeIndex: j,
+        distanceSquared: dx * dx + dy * dy,
+      });
     }
-    dists.sort((u, v) => u.d2 - v.d2);
-    const k = Math.min(MAX_EDGES_PER_NODE, dists.length);
-    for (let m = 0; m < k; m++) {
-      addEdge(i, dists[m].j);
+
+    distances.sort((a, b) => a.distanceSquared - b.distanceSquared);
+
+    const edgeCount = Math.min(MAX_EDGES_PER_NODE, distances.length);
+    for (let m = 0; m < edgeCount; m++) {
+      const targetIndex = distances[m].nodeIndex;
+      const minIndex = Math.min(i, targetIndex);
+      const maxIndex = Math.max(i, targetIndex);
+      const edgeKey = `${minIndex}-${maxIndex}`;
+
+      if (!edges.has(edgeKey)) {
+        edges.add(edgeKey);
+        const targetNode = renderedNodes[targetIndex];
+        const dx = sourceNode.x - targetNode.x;
+        const dy = sourceNode.y - targetNode.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance > 0) {
+          edgeDistances.push(distance);
+        }
+      }
     }
   }
 
-  ctx.globalAlpha = 1;
-  for (const node of entries) {
-    if (ctx) drawNode(ctx, node.x, node.y, centerX, centerY, node.id === id);
+  const maxDistance = Math.max(MIN_MAX_DISTANCE, ...edgeDistances);
+
+  edges.clear();
+  for (let i = 0; i < nodeCount; i++) {
+    const sourceNode = renderedNodes[i];
+    const distances: NodeDistance[] = [];
+
+    for (let j = 0; j < nodeCount; j++) {
+      if (i === j) continue;
+      const targetNode = renderedNodes[j];
+      const dx = sourceNode.x - targetNode.x;
+      const dy = sourceNode.y - targetNode.y;
+      distances.push({
+        nodeIndex: j,
+        distanceSquared: dx * dx + dy * dy,
+      });
+    }
+
+    distances.sort((a, b) => a.distanceSquared - b.distanceSquared);
+
+    const edgeCount = Math.min(MAX_EDGES_PER_NODE, distances.length);
+    for (let m = 0; m < edgeCount; m++) {
+      const targetIndex = distances[m].nodeIndex;
+      const minIndex = Math.min(i, targetIndex);
+      const maxIndex = Math.max(i, targetIndex);
+      const edgeKey = `${minIndex}-${maxIndex}`;
+
+      if (edges.has(edgeKey)) continue;
+      edges.add(edgeKey);
+
+      const targetNode = renderedNodes[targetIndex];
+      const dx = sourceNode.x - targetNode.x;
+      const dy = sourceNode.y - targetNode.y;
+      const distance = Math.hypot(dx, dy);
+
+      if (distance === 0) continue;
+
+      drawEdge(
+        renderingContext,
+        { x: sourceNode.x, y: sourceNode.y },
+        { x: targetNode.x, y: targetNode.y },
+        distance,
+        maxDistance,
+        viewportBounds,
+        viewportWidth,
+        viewportHeight
+      );
+    }
   }
-  ctx.globalAlpha = 1;
+
+  renderingContext.globalAlpha = 1;
+  const center: Point = { x: centerX, y: centerY };
+  for (const node of renderedNodes) {
+    drawNode(
+      renderingContext,
+      { x: node.x, y: node.y },
+      center,
+      node.id === nodeId,
+      viewportBounds,
+      viewportWidth,
+      viewportHeight
+    );
+  }
+  renderingContext.globalAlpha = 1;
 }
 
-function loop() {
-  const t = Date.now() * TIME_SCALE;
-  drawBackground();
-  drawGraph(t);
-  requestAnimationFrame(loop);
+function animationLoop(): void {
+  if (!ctx) return;
+
+  drawBackground(ctx, viewportBounds);
+  renderGraph();
+  requestAnimationFrame(animationLoop);
 }
 
-resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
+const windowBoundsObserver = createWindowBoundsObserver((state) => {
+  if (!canvas) return;
 
-channel.onmessage = (event) => {
-  const msg = event.data;
-  if (!msg?.type) return;
-  if (msg.type === "pos" && msg.id !== id) {
-    nodes.set(msg.id, { baseX: msg.x, baseY: msg.y });
-  }
-  if (msg.type === "bye" && msg.id !== id) {
-    nodes.delete(msg.id);
+  const { viewportX, viewportY } = state;
+  const { innerWidth, innerHeight } = window;
+  const centerX = viewportX + innerWidth / 2;
+  const centerY = viewportY + innerHeight / 2;
+
+  currentNodeBase = { baseX: centerX, baseY: centerY };
+
+  viewportBounds = {
+    minX: viewportX,
+    minY: viewportY,
+    maxX: viewportX + innerWidth,
+    maxY: viewportY + innerHeight,
+  };
+
+  resizeCanvas();
+});
+
+broadcastChannel.onmessage = ({ data: { type, id, x, y } }: MessageEvent) => {
+  if (!type || id === nodeId) return;
+
+  switch (type) {
+    case "pos":
+      nodePositions.set(id, { baseX: x, baseY: y });
+      break;
+
+    case "bye":
+      nodePositions.delete(id);
+      break;
   }
 };
 
 window.addEventListener("beforeunload", () => {
-  channel.postMessage({ type: "bye", id });
+  broadcastChannel.postMessage({ type: "bye", id: nodeId });
 });
 
-createScreenLens((state) => {
-  if (!canvas) return;
-  const cx = state.viewportX + window.innerWidth / 2;
-  const cy = state.viewportY + window.innerHeight / 2;
-  selfBase = { x: cx, y: cy };
-  canvas.style.transform = `translate(${state.canvasOffsetX}px, ${state.canvasOffsetY}px)`;
+window.addEventListener("resize", () => {
+  const { viewportX, viewportY } = windowBoundsObserver.getState();
+
+  viewportBounds = {
+    minX: viewportX,
+    minY: viewportY,
+    maxX: viewportX + window.innerWidth,
+    maxY: viewportY + window.innerHeight,
+  };
+
+  resizeCanvas();
 });
 
-loop();
+resizeCanvas();
+animationLoop();

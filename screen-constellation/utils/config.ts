@@ -9,8 +9,8 @@ export const COLORS = {
 } as const;
 
 export const EDGE = {
-  ALPHA_MIN: 0.04,
-  ALPHA_MAX: 0.26,
+  ALPHA_MIN: 0.048,
+  ALPHA_MAX: 0.312,
   WIDTH_MIN: 0.4,
   WIDTH_MAX: 1.2,
 } as const;
@@ -18,7 +18,7 @@ export const EDGE = {
 export const GRID = {
   ALPHA: 0.35,
   LINE_WIDTH: 0.5,
-  STEP: 80,
+  STEP: 60,
 } as const;
 
 export const NODE = {
@@ -29,12 +29,11 @@ export const NODE = {
   RADIUS_RANGE: 24,
   RADIUS_SELF: 4.2,
   RADIUS_VARIATION: 0.4,
-  SPEED_MIN: 0.35,
-  SPEED_RANGE: 0.45,
+  // animation speeds are in radians per millisecond (for oscillation cycles)
+  SPEED_MIN: 0.00035,
+  SPEED_RANGE: 0.00045,
 } as const;
 
 export const MAX_EDGES_PER_NODE = 3;
-export const TIME_SCALE = 0.001;
-export const WORLD_HEIGHT = 1080;
-export const WORLD_WIDTH = 1920;
-export const MAX_DISTANCE = Math.hypot(WORLD_WIDTH, WORLD_HEIGHT);
+export const MIN_MAX_DISTANCE = 100;
+export const VIEWPORT_CULLING_PADDING = 50;
