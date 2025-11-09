@@ -1,5 +1,11 @@
-import { lerp, TWO_PI } from "./math";
-import { COLORS, EDGE, GRID, NODE, VIEWPORT_CULLING_PADDING } from "./config";
+import { lerp, TWO_PI } from "./math.ts";
+import {
+  COLORS,
+  EDGE,
+  GRID,
+  NODE,
+  VIEWPORT_CULLING_PADDING,
+} from "./config.ts";
 
 export interface Point {
   x: number;
@@ -90,8 +96,9 @@ export function drawEdge(
     return;
   }
 
-  const softness =
-    maxDistance > 0 ? 1 - Math.min(distance / maxDistance, 1) : 0;
+  const normalizedDistance =
+    maxDistance > 0 ? Math.min(distance / maxDistance, 1) : 0;
+  const softness = 1 - Math.sqrt(normalizedDistance);
 
   ctx.save();
   ctx.globalAlpha = lerp(EDGE.ALPHA_MIN, EDGE.ALPHA_MAX, softness);

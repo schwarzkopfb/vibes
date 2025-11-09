@@ -1,0 +1,4 @@
+{
+  "deno.enable": true,
+  "deno.disablePaths": ["screen-constellation/dist", "screen-constellation/src"]
+}

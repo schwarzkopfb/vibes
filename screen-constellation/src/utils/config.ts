@@ -9,10 +9,10 @@ export const COLORS = {
 } as const;
 
 export const EDGE = {
-  ALPHA_MIN: 0.048,
-  ALPHA_MAX: 0.312,
-  WIDTH_MIN: 0.4,
-  WIDTH_MAX: 1.2,
+  ALPHA_MIN: 0.12,
+  ALPHA_MAX: 0.4,
+  WIDTH_MIN: 1.2,
+  WIDTH_MAX: 2.5,
 } as const;
 
 export const GRID = {

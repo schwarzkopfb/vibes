@@ -1,4 +1,4 @@
-// utils/windowBoundsObserver.ts
+// src/utils/windowBoundsObserver.ts
 function createWindowBoundsObserver(onUpdate) {
   let tracking = false;
   let frameId = 0;
@@ -94,7 +94,7 @@ function createWindowBoundsObserver(onUpdate) {
   };
 }
 
-// utils/random.ts
+// src/utils/random.ts
 var MULBERRY_SEED = 1831565813;
 var UINT32_MAX = 4294967296;
 var HASH_MULTIPLIER = 31;
@@ -116,13 +116,13 @@ function hashStringToSeed(str) {
   return hash >>> 0;
 }
 
-// utils/math.ts
+// src/utils/math.ts
 var TWO_PI = Math.PI * 2;
 function lerp(min, max, t) {
   return min + (max - min) * t;
 }
 
-// utils/config.ts
+// src/utils/config.ts
 var BROADCAST_INTERVAL = 400;
 var COLORS = {
   BACKGROUND: "#fafafa",
@@ -132,10 +132,10 @@ var COLORS = {
   EDGE: "#43464a"
 };
 var EDGE = {
-  ALPHA_MIN: 0.048,
-  ALPHA_MAX: 0.312,
-  WIDTH_MIN: 0.4,
-  WIDTH_MAX: 1.2
+  ALPHA_MIN: 0.12,
+  ALPHA_MAX: 0.4,
+  WIDTH_MIN: 1.2,
+  WIDTH_MAX: 2.5
 };
 var GRID = {
   ALPHA: 0.35,
@@ -158,7 +158,7 @@ var MAX_EDGES_PER_NODE = 3;
 var MIN_MAX_DISTANCE = 100;
 var VIEWPORT_CULLING_PADDING = 50;
 
-// utils/drawing.ts
+// src/utils/drawing.ts
 function drawGrid(ctx2, viewportBounds2) {
   const { minX, minY, maxX, maxY } = viewportBounds2;
   const startX = Math.floor(minX / GRID.STEP) * GRID.STEP;
@@ -206,7 +206,8 @@ function drawEdge(ctx2, point1, point2, distance, maxDistance, viewportBounds2, 
   if (maxEdgeX < -VIEWPORT_CULLING_PADDING || minEdgeX > viewportWidth + VIEWPORT_CULLING_PADDING || maxEdgeY < -VIEWPORT_CULLING_PADDING || minEdgeY > viewportHeight + VIEWPORT_CULLING_PADDING) {
     return;
   }
-  const softness = maxDistance > 0 ? 1 - Math.min(distance / maxDistance, 1) : 0;
+  const normalizedDistance = maxDistance > 0 ? Math.min(distance / maxDistance, 1) : 0;
+  const softness = 1 - Math.sqrt(normalizedDistance);
   ctx2.save();
   ctx2.globalAlpha = lerp(EDGE.ALPHA_MIN, EDGE.ALPHA_MAX, softness);
   ctx2.lineWidth = lerp(EDGE.WIDTH_MIN, EDGE.WIDTH_MAX, softness);
@@ -240,7 +241,7 @@ function drawNode(ctx2, point, center, isSelf, viewportBounds2, viewportWidth, v
   ctx2.restore();
 }
 
-// index.ts
+// src/index.ts
 var canvas = document.getElementById("canvas");
 var ctx = canvas?.getContext("2d");
 var nodeId = crypto.randomUUID && crypto.randomUUID() || Math.random().toString(36).slice(2);

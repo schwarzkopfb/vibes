@@ -12,11 +12,11 @@ Open `dist/index.html` in multiple browser windows and move them around. Each wi
 
 ```bash
 cd screen-constellation
-deno bundle --outdir dist index.html
-deno run -A npm:http-server
+deno bundle --outdir dist src/index.html
+deno run -A ./main.ts
 ```
 
-Then open `http://localhost:8080/screen-constellation/dist/` in multiple windows.
+Then open `http://localhost:8000/screen-constellation/` in multiple windows.
 
 ## Features
 
