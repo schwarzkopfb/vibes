@@ -462,3 +462,13 @@ window.addEventListener("resize", () => {
 });
 resizeCanvas();
 animationLoop();
+window.addEventListener("click", (e) => {
+  if (e.target instanceof Element && e.target.closest("a")) return;
+  const width = 300;
+  const height = 300;
+  const borderX = (window.outerWidth - window.innerWidth) / 2;
+  const headerHeight = window.outerHeight - window.innerHeight;
+  const left = e.screenX - width / 2 - borderX;
+  const top = e.screenY - height / 2 - headerHeight;
+  window.open(window.location.href, "_blank", `width=${width},height=${height},left=${left},top=${top}`);
+});

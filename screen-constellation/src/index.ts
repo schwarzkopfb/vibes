@@ -1,6 +1,6 @@
 import "./index.css";
 import { createWindowBoundsObserver } from "./utils/windowBoundsObserver.ts";
-import { mulberry32, hashStringToSeed } from "./utils/random.ts";
+import { hashStringToSeed, mulberry32 } from "./utils/random.ts";
 import { TWO_PI } from "./utils/math.ts";
 import {
   BROADCAST_INTERVAL,
@@ -9,11 +9,11 @@ import {
   NODE,
 } from "./utils/config.ts";
 import {
-  type Point,
-  ViewportBounds,
   drawBackground,
   drawEdge,
   drawNode,
+  type Point,
+  ViewportBounds,
 } from "./utils/drawing.ts";
 
 interface NodeAnimationParams {
@@ -42,8 +42,7 @@ interface NodeDistance {
 
 const canvas = document.getElementById("canvas") as HTMLCanvasElement | null;
 const ctx = canvas?.getContext("2d");
-const nodeId =
-  (crypto.randomUUID && crypto.randomUUID()) ||
+const nodeId = (crypto.randomUUID && crypto.randomUUID()) ||
   Math.random().toString(36).slice(2);
 const broadcastChannel = new BroadcastChannel("window-graph");
 const nodePositions = new Map<string, NodeBasePosition>();
@@ -91,7 +90,7 @@ function calculateAnimatedPosition(
   nodeId: string,
   baseX: number,
   baseY: number,
-  time: number
+  time: number,
 ): Point {
   const params = getNodeAnimationParams(nodeId);
   return {
@@ -128,19 +127,19 @@ function renderGraph(): void {
         id,
         nodeBase.baseX,
         nodeBase.baseY,
-        time
+        time,
       );
       return { id, x: position.x, y: position.y };
-    }
+    },
   );
 
   if (renderedNodes.length === 0) return;
 
   const nodeCount = renderedNodes.length;
-  const centerX =
-    renderedNodes.reduce((sum, node) => sum + node.x, 0) / nodeCount;
-  const centerY =
-    renderedNodes.reduce((sum, node) => sum + node.y, 0) / nodeCount;
+  const centerX = renderedNodes.reduce((sum, node) => sum + node.x, 0) /
+    nodeCount;
+  const centerY = renderedNodes.reduce((sum, node) => sum + node.y, 0) /
+    nodeCount;
   const viewportWidth = viewportBounds.maxX - viewportBounds.minX;
   const viewportHeight = viewportBounds.maxY - viewportBounds.minY;
   const edges = new Set<string>();
@@ -228,7 +227,7 @@ function renderGraph(): void {
         maxDistance,
         viewportBounds,
         viewportWidth,
-        viewportHeight
+        viewportHeight,
       );
     }
   }
@@ -243,7 +242,7 @@ function renderGraph(): void {
       node.id === nodeId,
       viewportBounds,
       viewportWidth,
-      viewportHeight
+      viewportHeight,
     );
   }
   renderingContext.globalAlpha = 1;
@@ -306,6 +305,23 @@ window.addEventListener("resize", () => {
   };
 
   resizeCanvas();
+});
+
+window.addEventListener("click", (e) => {
+  if (e.target instanceof Element && e.target.closest("a")) return;
+
+  const width = 300;
+  const height = 300;
+  const borderX = (window.outerWidth - window.innerWidth) / 2;
+  const headerHeight = window.outerHeight - window.innerHeight;
+  const left = e.screenX - width / 2 - borderX;
+  const top = e.screenY - height / 2 - headerHeight;
+
+  window.open(
+    window.location.href,
+    "_blank",
+    `width=${width},height=${height},left=${left},top=${top}`,
+  );
 });
 
 resizeCanvas();
