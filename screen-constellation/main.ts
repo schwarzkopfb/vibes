@@ -4,7 +4,6 @@ import { dirname, fromFileUrl, join } from "@std/path";
 const STATIC_DIR = join(dirname(fromFileUrl(import.meta.url)), "dist");
 
 export default function handler(req: Request) {
-  console.log("screen-constellation", STATIC_DIR);
   return serveDir(req, {
     fsRoot: STATIC_DIR,
     urlRoot: "screen-constellation",
